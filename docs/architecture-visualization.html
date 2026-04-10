@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code - Interactive Architecture Visualization</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#080c14;color:#c8d6e5;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;overflow:hidden;height:100vh;width:100vw}
+#app{display:flex;flex-direction:column;height:100vh}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 24px;background:linear-gradient(90deg,#0d1220,#141c2e,#0d1220);border-bottom:1px solid #1e2a3a;z-index:10;flex-shrink:0}
+.topbar .logo{display:flex;align-items:center;gap:12px}
+.topbar .logo h1{font-size:16px;font-weight:600;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:1px}
+.topbar .subtitle{font-size:11px;color:#5a6a7a;margin-left:8px}
+
+.scenario-bar{display:flex;gap:6px;align-items:center;padding:8px 24px;background:#0a0d15;border-bottom:1px solid #1a2232;flex-shrink:0;overflow-x:auto}
+.scenario-bar label{font-size:11px;color:#5a6a7a;margin-right:8px;white-space:nowrap}
+.scenario-btn{padding:5px 14px;border:1px solid #1e2a3a;border-radius:16px;background:0;color:#7a8a9a;font-size:11px;font-family:inherit;cursor:pointer;transition:all .3s;white-space:nowrap}
+.scenario-btn:hover{border-color:#3a5a8a;color:#a0b8d0;background:rgba(60,100,160,.1)}
+.scenario-btn.active{border-color:#60a5fa;color:#60a5fa;background:rgba(96,165,250,.12);box-shadow:0 0 12px rgba(96,165,250,.15)}
+
+.main-area{flex:1;display:flex;position:relative;overflow:hidden}
+#archCanvas{flex:1;display:block}
+
+.detail-panel{position:absolute;right:-420px;top:0;bottom:0;width:400px;background:linear-gradient(180deg,#0f1520,#0a0e17);border-left:1px solid #1e2a3a;padding:20px;transition:right .4s cubic-bezier(.16,1,.3,1);z-index:20;overflow-y:auto}
+.detail-panel.open{right:0}
+.close-btn{position:absolute;top:12px;right:14px;width:28px;height:28px;border:1px solid #2a3a4a;border-radius:6px;background:0;color:#7a8a9a;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.close-btn:hover{border-color:#ff6b6b;color:#ff6b6b}
+.detail-panel h2{font-size:15px;margin-bottom:4px;padding-right:36px}
+.node-type{font-size:11px;color:#5a6a7a;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
+.section-title{font-size:11px;color:#a78bfa;text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #1e2a3a}
+.desc{font-size:12px;line-height:1.7;color:#8a9aaa}
+.io-block{background:#111822;border:1px solid #1e2a3a;border-radius:8px;padding:10px 12px;margin:6px 0;font-size:11px}
+.io-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.io-label.input{color:#34d399}
+.io-label.output{color:#f97316}
+.io-block code{color:#c8d6e5;font-size:11px;white-space:pre-wrap;word-break:break-all}
+.file-list{list-style:none;margin:4px 0}
+.file-list li{font-size:11px;color:#7a8a9a;padding:2px 0}
+.file-list li::before{content:'→ ';color:#3a5a8a}
+
+.flow-info{padding:8px 24px;background:#0a0d15;border-top:1px solid #1a2232;display:flex;align-items:center;gap:20px;flex-shrink:0;min-height:36px}
+.step-indicator{display:flex;gap:4px;align-items:center}
+.step-dot{width:8px;height:8px;border-radius:50%;background:#1e2a3a;transition:all .3s}
+.step-dot.active{background:#60a5fa;box-shadow:0 0 8px rgba(96,165,250,.5)}
+.step-dot.passed{background:#34d399}
+.flow-desc{font-size:11px;color:#5a6a7a;flex:1}
+.flow-desc strong{color:#60a5fa}
+.flow-controls{display:flex;gap:8px;margin-left:auto}
+.flow-controls button{padding:3px 12px;border:1px solid #1e2a3a;border-radius:4px;background:0;color:#7a8a9a;font-size:11px;font-family:inherit;cursor:pointer;transition:all .2s}
+.flow-controls button:hover{border-color:#3a5a8a;color:#a0b8d0}
+.flow-controls button:disabled{opacity:.3;cursor:not-allowed}
+
+.canvas-tooltip{position:absolute;padding:8px 12px;background:#1a2232;border:1px solid #2a3a5a;border-radius:6px;font-size:11px;color:#c8d6e5;pointer-events:none;opacity:0;transition:opacity .15s;z-index:30;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,.5);line-height:1.5}
+.canvas-tooltip.visible{opacity:1}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:0}
+::-webkit-scrollbar-thumb{background:#1e2a3a;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="logo">
+      <svg viewBox="0 0 28 28" fill="none" width="28" height="28">
+        <rect width="28" height="28" rx="6" fill="#1a2232"/>
+        <path d="M7 14L14 7L21 14L14 21Z" stroke="#60a5fa" stroke-width="1.5" fill="none"/>
+        <circle cx="14" cy="14" r="3" fill="#a78bfa"/>
+      </svg>
+      <h1>CLAUDE CODE</h1>
+      <span class="subtitle">Architecture Explorer</span>
+    </div>
+    <div style="font-size:11px;color:#3a4a5a">TypeScript + React (Ink) + Bun</div>
+  </div>
+
+  <div class="scenario-bar">
+    <label>FLOW</label>
+    <button class="scenario-btn active" data-scenario="prompt">User Prompt → Response</button>
+    <button class="scenario-btn" data-scenario="command">Slash Command /xxx</button>
+    <button class="scenario-btn" data-scenario="tool">Tool Execution Pipeline</button>
+    <button class="scenario-btn" data-scenario="mcp">MCP Tool Proxy</button>
+    <button class="scenario-btn" data-scenario="startup">Startup Sequence</button>
+    <button class="scenario-btn" data-scenario="permission">Permission Decision</button>
+  </div>
+
+  <div class="main-area">
+    <canvas id="archCanvas"></canvas>
+    <div class="detail-panel" id="detailPanel">
+      <button class="close-btn" id="closeDetail">&times;</button>
+      <div id="detailContent"></div>
+    </div>
+    <div class="canvas-tooltip" id="tooltip"></div>
+  </div>
+
+  <div class="flow-info">
+    <div class="step-indicator" id="stepIndicator"></div>
+    <div class="flow-desc" id="flowDesc">Select a scenario and click <strong>Next</strong> or <strong>Auto</strong> to trace the data flow</div>
+    <div class="flow-controls">
+      <button id="btnPrev" disabled>&larr; Prev</button>
+      <button id="btnNext">Next &rarr;</button>
+      <button id="btnAutoPlay">&#9654; Auto</button>
+      <button id="btnReset">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// DATA
+// ================================================================
+const LAYER_DEFS = [
+  { id:'entry',     label:'ENTRY LAYER',     color:'#f97316', row:0 },
+  { id:'ui',        label:'UI LAYER',         color:'#60a5fa', row:1 },
+  { id:'engine',    label:'QUERY ENGINE',     color:'#a78bfa', row:2 },
+  { id:'toolcmd',   label:'TOOL / COMMAND',   color:'#34d399', row:3 },
+  { id:'service',   label:'SERVICE LAYER',    color:'#f472b6', row:4 },
+  { id:'infra',     label:'STATE / PERMISSION',color:'#6ee7b7',row:5 },
+  { id:'extension', label:'EXTENSIONS',       color:'#818cf8', row:6 },
+];
+const LAYER_MAP = {};
+LAYER_DEFS.forEach(l => LAYER_MAP[l.id] = l);
+
+// Node positions: gx = global grid-x (0..10), row from layer
+const N = [
+  // Entry
+  {id:'cli',       label:'cli.tsx',           layer:'entry',   gx:2,  desc:'CLI argument parsing. Fast paths: --version, --dump-system-prompt. Dispatches to main.tsx for standard startup.',files:['src/entrypoints/cli.tsx'],in:'CLI args: claude [opts] [prompt]',out:'Parsed args → main.tsx'},
+  {id:'main',      label:'main.tsx',          layer:'entry',   gx:4.5,desc:'Main bootstrap (4600+ lines). Mode detection: Bridge / Daemon / MCP / Interactive. Parallel init of MDM, keychain, GrowthBook.',files:['src/main.tsx'],in:'Parsed CLI args + env',out:'Initialized app → Ink'},
+  {id:'mcp_entry', label:'mcp.ts',            layer:'entry',   gx:7,  desc:'MCP server entry. Starts Claude Code as a Model Context Protocol server exposing tools to external clients.',files:['src/entrypoints/mcp.ts'],in:'--mcp flag',out:'MCP server instance'},
+  {id:'sdk_entry', label:'agentSdkTypes.ts',  layer:'entry',   gx:9,  desc:'Agent SDK public types. Enables using Claude Code as a library from external code.',files:['src/entrypoints/agentSdkTypes.ts'],in:'SDK import',out:'QueryEngine instance'},
+
+  // UI
+  {id:'repl',      label:'REPL.tsx',          layer:'ui',      gx:1.5,desc:'Main interactive screen (895KB). Message history, input handling, permission dialogs, virtual scrolling.',files:['src/screens/REPL.tsx'],in:'User keystrokes + paste',out:'Rendered terminal UI'},
+  {id:'components',label:'Components',        layer:'ui',      gx:4,  desc:'150+ React components: MessageResponse, Markdown, ToolUseLoader, AgentProgressLine, CompactSummary, design system.',files:['src/components/'],in:'Props from REPL',out:'Ink virtual DOM'},
+  {id:'hooks',     label:'Hooks (96+)',       layer:'ui',      gx:6.5,desc:'96+ React Hooks: useTextInput, useVimInput, usePasteHandler, useCanUseTool (40KB), useVirtualScroll, useTypeahead.',files:['src/hooks/'],in:'State subscriptions',out:'Derived state + effects'},
+  {id:'ink',       label:'Ink Framework',     layer:'ui',      gx:9,  desc:'Custom Ink: Box, Text, ScrollBox, AlternateScreen, ANSI renderer. Context providers chain for terminal rendering.',files:['src/ink/'],in:'React virtual DOM',out:'ANSI escape → terminal'},
+
+  // Engine
+  {id:'queryEngine',label:'QueryEngine',      layer:'engine',  gx:2.5,desc:'Core class (1295 lines). submitMessage() → AsyncGenerator<SDKMessage>. System prompt building, tool call processing, history management.',files:['src/QueryEngine.ts'],in:'User prompt + history',out:'AsyncGenerator<SDKMessage>'},
+  {id:'query',      label:'query.ts',         layer:'engine',  gx:5.5,desc:'REPL conversation handler (1729 lines). Integrates permissions, tool execution feedback, and Ink rendering with QueryEngine.',files:['src/query.ts'],in:'User message from REPL',out:'Rendered responses'},
+  {id:'context',    label:'context.ts',       layer:'engine',  gx:8.5,desc:'System/user context builder. Git status, CLAUDE.md, current date, memory files → system prompt construction.',files:['src/context.ts'],in:'Project root + Git',out:'System prompt blocks'},
+
+  // Tool & Command (same row)
+  {id:'toolDef',   label:'Tool.ts',           layer:'toolcmd', gx:0.5,desc:'Tool type definition (792 lines). name, description, getInputSchema(), validateInput(), executeUnsafe(), isConcurrencySafe.',files:['src/Tool.ts'],in:'Tool interface',out:'Type definitions'},
+  {id:'toolReg',   label:'tools.ts',          layer:'toolcmd', gx:2.2,desc:'Tool registry (390 lines). getAllBaseTools() = single source of truth. getTools() filters. assembleToolPool() merges MCP tools.',files:['src/tools.ts'],in:'Permission + flags',out:'Tool[] pool'},
+  {id:'tools',     label:'Tools (43+)',       layer:'toolcmd', gx:4,  desc:'43+ tools: BashTool, FileReadTool, FileEditTool, GlobTool, GrepTool, AgentTool, WebSearchTool, SkillTool, etc.',files:['src/tools/'],in:'Validated JSON input',out:'ToolResult {content}'},
+  {id:'toolOrch',  label:'Orchestration',     layer:'toolcmd', gx:5.8,desc:'Execution orchestrator. Read ops → concurrent (max 10). Write ops → serial. Pre/post hooks, FileStateCache.',files:['src/services/tools/toolOrchestration.ts'],in:'ToolUseBlock[] from API',out:'ToolResult[] → API'},
+  {id:'cmdReg',    label:'commands.ts',       layer:'toolcmd', gx:7.8,desc:'Command registry (754 lines). 50+ slash commands. getCommands(cwd) aggregates built-in, plugins, skills, workflows.',files:['src/commands.ts'],in:'getCommands(cwd)',out:'Sorted Command[]'},
+  {id:'skills',    label:'Skills (16+)',      layer:'toolcmd', gx:9.5,desc:'16+ built-in skills: batch, claudeApi, debug, loop, remember, simplify, verify. From skills/bundled/ and .claude/skills/.',files:['src/skills/'],in:'/skill-name [args]',out:'ContentBlockParam[]'},
+
+  // Service
+  {id:'api',       label:'claude.ts API',     layer:'service', gx:1,  desc:'Claude API core (125KB). Message normalization, tool schema, thinking mode, prompt caching, retry logic, streaming.',files:['src/services/api/claude.ts'],in:'Messages + tools + prompt',out:'Stream<SDKMessage>'},
+  {id:'mcpClient', label:'MCP Client',        layer:'service', gx:3.2,desc:'MCP client. MCPConnectionManager: stdio/SSE/HTTP/WS. OAuth + XAA auth. Tool/resource/command proxy.',files:['src/services/mcp/'],in:'MCP config from settings',out:'Connected servers + tools'},
+  {id:'compact',   label:'Compact',           layer:'service', gx:5.2,desc:'Conversation compression. Auto at token threshold. Fork Agent. Types: full, micro, apiMicro.',files:['src/services/compact/'],in:'History > threshold',out:'Compressed summary'},
+  {id:'analytics', label:'Analytics',         layer:'service', gx:7.2,desc:'Event logging, GrowthBook flags, Datadog. Buffered queue at startup. Sampling + PII protection.',files:['src/services/analytics/'],in:'logEvent(name, props)',out:'Events → Datadog + 1P'},
+  {id:'lsp',       label:'LSP Service',       layer:'service', gx:9.2,desc:'Language Server Protocol. Manages LSP instances (TypeScript, Python). Diagnostics + passive feedback.',files:['src/services/lsp/'],in:'File changes',out:'Diagnostics'},
+
+  // State / Permission
+  {id:'state',     label:'bootstrap/state',   layer:'infra',   gx:1.5,desc:'Global session state (1758 lines, 80+ fields). sessionId, projectRoot, cwd, modelUsage, totalCostUSD. Warning: do not add state.',files:['src/bootstrap/state.ts'],in:'Session init params',out:'Global mutable state'},
+  {id:'appState',  label:'AppStateStore',     layer:'infra',   gx:4.5,desc:'Reactive state (DeepImmutable). Subscribe/setState. Manages settings, tasks, MCP, plugins, permissions, UI.',files:['src/state/AppStateStore.ts'],in:'setState(updater)',out:'Immutable state + notify'},
+  {id:'permissions',label:'Permissions',      layer:'infra',   gx:7.5,desc:'3 modes: auto | manual | bypass. Deny/allow rules, ML classifier (auto), user prompts. Denial tracking prevents loops.',files:['src/utils/permissions/'],in:'Tool name + input',out:'allow | deny | ask'},
+
+  // Extensions
+  {id:'bridge',    label:'Bridge',            layer:'extension',gx:1,  desc:'Remote control. Lightweight network intermediary for IDE integration and external orchestration.',files:['src/bridge/'],in:'Bridge protocol msgs',out:'Remote cmd execution'},
+  {id:'coordinator',label:'Coordinator',      layer:'extension',gx:3.5,desc:'Multi-agent coordination. Teams of agents, task distribution, result aggregation across parallel workers.',files:['src/coordinator/'],in:'Task decomposition',out:'Multi-agent results'},
+  {id:'remote',    label:'Remote',            layer:'extension',gx:6,  desc:'Remote session support. Connects to cloud Claude Code Remote for server-side execution.',files:['src/remote/'],in:'Remote URL',out:'Proxied session I/O'},
+  {id:'voice',     label:'Voice',             layer:'extension',gx:8.5,desc:'Voice input. Audio capture, transcription, feeds into prompt pipeline.',files:['src/voice/'],in:'Audio stream',out:'Transcribed text'},
+];
+
+const EDGES = [
+  ['cli','main'],['main','repl'],['mcp_entry','mcpClient'],['sdk_entry','queryEngine'],
+  ['repl','query'],['repl','hooks'],['repl','components'],['components','ink'],
+  ['query','queryEngine'],['queryEngine','api'],['queryEngine','toolOrch'],['queryEngine','context'],['queryEngine','compact'],
+  ['toolOrch','tools'],['toolOrch','permissions'],['toolReg','tools'],['toolDef','toolReg'],
+  ['cmdReg','skills'],['api','state'],['state','appState'],
+  ['repl','bridge'],['repl','remote'],['queryEngine','coordinator'],
+  ['mcpClient','appState'],['tools','state'],['appState','permissions'],['queryEngine','analytics'],['tools','lsp'],
+];
+
+const SCENARIOS = {
+  prompt:{title:'User Prompt → Response',steps:[
+    {nodes:['cli'],desc:'User runs: claude "explain this code"',detail:'CLI parses args, detects standard mode, loads main.tsx dynamically'},
+    {nodes:['main'],desc:'main.tsx bootstraps application',detail:'Parallel: MDM settings + keychain + GrowthBook. Then migrations (11), state init'},
+    {nodes:['repl','components','ink'],desc:'REPL renders, user types prompt',detail:'useTextInput captures keystrokes. Ink renders terminal UI via ANSI escape codes'},
+    {nodes:['query','queryEngine'],desc:'query.ts hands off to QueryEngine',detail:'processUserInput(): slash cmd check, attachment handling, UserMessage construction'},
+    {nodes:['queryEngine','context'],desc:'System prompt built with context',detail:'getSystemContext(): Git branch + commits. getUserContext(): CLAUDE.md + date + memory'},
+    {nodes:['api'],desc:'Claude API called with streaming',detail:'normalizeMessagesForAPI(), toolToAPISchema(), thinking config. Returns AsyncGenerator<SDKMessage>'},
+    {nodes:['repl','components'],desc:'Response streamed and rendered live',detail:'MessageResponse renders text + code blocks with syntax highlighting in real-time'},
+    {nodes:['state','analytics'],desc:'Cost tracked, analytics logged',detail:'calculateUSDCost() → addToTotalCostState(). Token counts sent to Datadog'},
+  ],edges:[['cli','main'],['main','repl'],['repl','components'],['components','ink'],['repl','query'],['query','queryEngine'],['queryEngine','context'],['queryEngine','api'],['api','state'],['queryEngine','analytics']]},
+
+  command:{title:'Slash Command /xxx',steps:[
+    {nodes:['repl'],desc:'User types: /compact or /cost',detail:'Input starts with "/" → routed to command detection path instead of model'},
+    {nodes:['cmdReg'],desc:'commands.ts resolves the command',detail:'getCommands(cwd) returns merged list (7 priority levels). findCommand() by name/alias'},
+    {nodes:['skills'],desc:'Skill loaded if skill-type command',detail:'getPromptForCommand() generates ContentBlockParam[]. bundled/ + .claude/skills/ sources'},
+    {nodes:['queryEngine','query'],desc:'Prompt command → QueryEngine',detail:'type:"prompt" → submit to model. type:"local" → execute fn directly. type:"local-jsx" → Ink render'},
+    {nodes:['api'],desc:'API processes with skill context',detail:'Skill content injected as user message block. Model sees full skill instructions.'},
+    {nodes:['repl','components'],desc:'Result rendered to user',detail:'Model response rendered. For local commands, output shown directly.'},
+  ],edges:[['repl','query'],['query','queryEngine'],['cmdReg','skills'],['queryEngine','api'],['repl','components']]},
+
+  tool:{title:'Tool Execution Pipeline',steps:[
+    {nodes:['api'],desc:'API returns tool_use blocks in stream',detail:'Assistant message contains tool_use content blocks: {name, id, input} for each tool call'},
+    {nodes:['queryEngine'],desc:'QueryEngine extracts tool calls',detail:'processToolCalls() pulls ToolUseBlock[] from assistant message. Yields them for execution.'},
+    {nodes:['toolOrch'],desc:'Orchestrator partitions by concurrency',detail:'partitionToolCalls(): FileRead/Glob/Grep → concurrent (max 10). Bash/FileEdit/FileWrite → serial'},
+    {nodes:['permissions'],desc:'Permission check per tool call',detail:'hasPermissionsToUseTool(): 1) forced? 2) deny rules 3) allow rules 4) mode (auto classifier / manual / bypass)'},
+    {nodes:['tools'],desc:'Tool.executeUnsafe() runs',detail:'validateInput() first. Then executeUnsafe(input, context). File tools update FileStateCache. Result: ToolResult'},
+    {nodes:['toolOrch','queryEngine'],desc:'Results aggregated → sent back',detail:'ToolResult[] collected. Sent as tool_result messages in next API turn. Loop may continue.'},
+    {nodes:['api'],desc:'API continues with tool results',detail:'Model sees tool outputs. May produce more text, or request more tool calls (agentic loop).'},
+    {nodes:['state'],desc:'State updated with results',detail:'File state cache refreshed. totalLinesAdded/Removed. totalCostUSD updated. totalToolDuration incremented.'},
+  ],edges:[['queryEngine','api'],['queryEngine','toolOrch'],['toolOrch','permissions'],['toolOrch','tools'],['tools','state'],['api','state']]},
+
+  mcp:{title:'MCP Tool Proxy Call',steps:[
+    {nodes:['api'],desc:'Model calls mcp__server__toolName',detail:'Tool name with mcp__ prefix = MCP proxy tool. Schema was injected by assembleToolPool()'},
+    {nodes:['queryEngine','toolOrch'],desc:'Routed through orchestration',detail:'MCPTool found in merged tool pool. executeUnsafe() delegates to MCP client.'},
+    {nodes:['permissions'],desc:'MCP permission check',detail:'Same rules as built-in tools. deny:["mcp__server"] blocks entire server. Per-tool rules supported.'},
+    {nodes:['mcpClient'],desc:'MCPConnectionManager calls server',detail:'JSON-RPC: tools/call over stdio / SSE / HTTP / WebSocket. Timeout + error handling.'},
+    {nodes:['appState'],desc:'MCP state in AppState',detail:'AppState.mcp: clients[], tools[], commands[], resources[]. Connection status tracked.'},
+    {nodes:['queryEngine'],desc:'Result proxied back to model',detail:'CallToolResult → ToolResult → tool_result message. Model sees standard tool output format.'},
+  ],edges:[['queryEngine','api'],['queryEngine','toolOrch'],['toolOrch','permissions'],['mcpClient','appState'],['toolOrch','tools']]},
+
+  startup:{title:'Startup Sequence',steps:[
+    {nodes:['cli'],desc:'CLI entry: fast path check',detail:'--version → exit(0), 0 modules. --dump-system-prompt → prompt only. Standard → dynamic import main.tsx'},
+    {nodes:['main'],desc:'Parallel initialization phase',detail:'Phase 1 (parallel): MDM + keychain + GrowthBook. Phase 2: global state. Phase 3: migrations (11).'},
+    {nodes:['state'],desc:'bootstrap/state initialized',detail:'80+ fields: sessionId, projectRoot, cwd, modelUsage, counters, meters. Single mutable singleton.'},
+    {nodes:['appState'],desc:'AppStateStore from bootstrap',detail:'Settings merged (5 priority levels). MCP config loaded. Permission mode set. DeepImmutable pattern.'},
+    {nodes:['mcpClient'],desc:'MCP servers connect in parallel',detail:'Per server: config parse → auth (OAuth/XAA) → transport → tool/resource discovery → register in AppState'},
+    {nodes:['repl','ink'],desc:'Ink renders REPL interface',detail:'Context chain: Theme → TermSize → Focus → Clock → Stdin → Cursor → Modal → Overlay → Screen content'},
+  ],edges:[['cli','main'],['main','repl'],['state','appState'],['mcpClient','appState'],['repl','components'],['components','ink']]},
+
+  permission:{title:'Permission Decision Flow',steps:[
+    {nodes:['toolOrch'],desc:'Tool call triggers permission check',detail:'Before any executeUnsafe(), hasPermissionsToUseTool() is called with tool name + input'},
+    {nodes:['permissions'],desc:'Step 1-2: Forced decisions, deny rules',detail:'Forced decisions override all. Then deny: ["ToolName"] and deny: ["Bash(rm *)"] patterns checked.'},
+    {nodes:['permissions','appState'],desc:'Step 3-4: Allow rules, mode check',detail:'allow: ["Bash(git *)"] patterns. Then mode: bypass→allow, auto→classifier, manual→ask user.'},
+    {nodes:['repl','hooks'],desc:'If "ask": permission dialog shown',detail:'useCanUseTool (40KB) renders prompt. Options: Allow once / Always allow (save rule) / Deny'},
+    {nodes:['permissions'],desc:'User decision applied',detail:'Always allow → rule saved to settings. Deny → tracked in denialTracking.ts (prevents infinite loops)'},
+    {nodes:['tools'],desc:'Tool executes or is rejected',detail:'Allow → executeUnsafe() proceeds. Deny → error result sent to model. Model may try alternative approach.'},
+  ],edges:[['toolOrch','permissions'],['appState','permissions'],['repl','hooks'],['toolOrch','tools']]},
+};
+
+// ================================================================
+// CANVAS ENGINE
+// ================================================================
+const canvas = document.getElementById('archCanvas');
+const ctx2d = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+const detailPanel = document.getElementById('detailPanel');
+const detailContent = document.getElementById('detailContent');
+
+let W, H, dpr;
+let nodePos = {};
+let hovered = null, selected = null;
+let scenario = 'prompt', step = -1;
+let autoTimer = null, time = 0;
+let particles = [], stars = [];
+
+const NODE_W = 120, NODE_H = 44;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  const r = canvas.parentElement.getBoundingClientRect();
+  W = r.width; H = r.height;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layout();
+  if (!stars.length) initStars();
+}
+
+function initStars() {
+  stars = [];
+  for (let i = 0; i < 100; i++) stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1+.3,a:Math.random()*.2+.05,s:Math.random()*.01+.005});
+}
+
+function layout() {
+  nodePos = {};
+  const pOpen = detailPanel.classList.contains('open');
+  const eW = pOpen ? W - 400 : W;
+  const px = 40, py = 36;
+  const rowH = (H - py * 2) / (LAYER_DEFS.length);
+
+  N.forEach(n => {
+    const layer = LAYER_MAP[n.layer];
+    const x = px + (n.gx / 10) * (eW - px * 2 - NODE_W);
+    const y = py + layer.row * rowH + (rowH - NODE_H) / 2;
+    nodePos[n.id] = {x, y, w: NODE_W, h: NODE_H};
+  });
+}
+
+// ─── Helpers ───
+function hex2rgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]}
+
+function rrect(x,y,w,h,r){
+  ctx2d.beginPath();
+  ctx2d.moveTo(x+r,y);ctx2d.lineTo(x+w-r,y);ctx2d.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx2d.lineTo(x+w,y+h-r);ctx2d.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx2d.lineTo(x+r,y+h);ctx2d.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx2d.lineTo(x,y+r);ctx2d.quadraticCurveTo(x,y,x+r,y);ctx2d.closePath();
+}
+
+function nodeActive(id){if(step<0)return false;const s=SCENARIOS[scenario];return s&&s.steps[step]&&s.steps[step].nodes.includes(id)}
+function nodeInPath(id){if(step<0)return false;const s=SCENARIOS[scenario];if(!s)return false;for(let i=0;i<=step;i++)if(s.steps[i].nodes.includes(id))return true;return false}
+function edgeInScenario(f,t){if(step<0)return false;const s=SCENARIOS[scenario];return s&&s.edges.some(e=>e[0]===f&&e[1]===t)}
+function edgeActive(f,t){
+  if(step<0)return false;const s=SCENARIOS[scenario];if(!s)return false;
+  if(!s.edges.some(e=>e[0]===f&&e[1]===t))return false;
+  const seen=new Set();for(let i=0;i<=step;i++)s.steps[i].nodes.forEach(n=>seen.add(n));
+  return seen.has(f)&&seen.has(t);
+}
+
+// ─── Particles ───
+function spawnParticles(){
+  if(step<0)return;
+  const s=SCENARIOS[scenario];if(!s)return;
+  s.edges.forEach(([f,t])=>{
+    if(!edgeActive(f,t))return;
+    if(Math.random()>.04)return;
+    const pf=nodePos[f],pt=nodePos[t];if(!pf||!pt)return;
+    const nd=N.find(n=>n.id===f);
+    const col=nd?LAYER_MAP[nd.layer].color:'#60a5fa';
+    const sx=pf.x+pf.w/2, sy=pf.y+pf.h;
+    const ex=pt.x+pt.w/2, ey=pt.y;
+    particles.push({sx,sy,ex,ey,t:0,speed:.008+Math.random()*.012,color:col,size:2+Math.random()*2});
+  });
+}
+
+function updateAndDrawParticles(){
+  particles=particles.filter(p=>{
+    p.t+=p.speed;
+    if(p.t>=1)return false;
+    const t=p.t;
+    // Bezier interpolation matching edge curves
+    const cpy1=p.sy+(p.ey-p.sy)*.35, cpy2=p.sy+(p.ey-p.sy)*.65;
+    const u=1-t;
+    const x=u*u*u*p.sx+3*u*u*t*p.sx+3*u*t*t*p.ex+t*t*t*p.ex;
+    const y=u*u*u*p.sy+3*u*u*t*cpy1+3*u*t*t*cpy2+t*t*t*p.ey;
+    const alpha=t<.8?1:(1-t)/.2;
+    const[r,g,b]=hex2rgb(p.color);
+    // Glow
+    ctx2d.beginPath();ctx2d.arc(x,y,p.size*4,0,Math.PI*2);
+    ctx2d.fillStyle=`rgba(${r},${g},${b},${alpha*.12})`;ctx2d.fill();
+    // Core
+    ctx2d.beginPath();ctx2d.arc(x,y,p.size,0,Math.PI*2);
+    ctx2d.fillStyle=`rgba(${r},${g},${b},${alpha})`;ctx2d.fill();
+    return true;
+  });
+}
+
+// ─── Main Render ───
+function render(){
+  time+=.016;
+  ctx2d.clearRect(0,0,W,H);
+  ctx2d.fillStyle='#080c14';ctx2d.fillRect(0,0,W,H);
+
+  // Stars
+  stars.forEach(s=>{
+    const f=.5+.5*Math.sin(time*s.s*60+s.x*7);
+    ctx2d.beginPath();ctx2d.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx2d.fillStyle=`rgba(180,200,240,${s.a*f})`;ctx2d.fill();
+  });
+
+  // Layer bands
+  const pOpen=detailPanel.classList.contains('open');
+  const eW=pOpen?W-400:W;
+  const py=36,rowH=(H-py*2)/LAYER_DEFS.length;
+
+  LAYER_DEFS.forEach(l=>{
+    const y=py+l.row*rowH;
+    const[r,g,b]=hex2rgb(l.color);
+    ctx2d.fillStyle=`rgba(${r},${g},${b},.018)`;
+    ctx2d.fillRect(0,y,eW,rowH);
+    // Subtle line
+    ctx2d.strokeStyle=`rgba(${r},${g},${b},.06)`;
+    ctx2d.lineWidth=.5;
+    ctx2d.beginPath();ctx2d.moveTo(0,y);ctx2d.lineTo(eW,y);ctx2d.stroke();
+    // Label
+    ctx2d.fillStyle=`rgba(${r},${g},${b},.2)`;
+    ctx2d.font='9px monospace';ctx2d.textAlign='left';
+    ctx2d.fillText(l.label,8,y+12);
+  });
+
+  // Edges
+  EDGES.forEach(([f,t])=>{
+    const pf=nodePos[f],pt=nodePos[t];if(!pf||!pt)return;
+    const fx=pf.x+pf.w/2,fy=pf.y+pf.h;
+    const tx=pt.x+pt.w/2,ty=pt.y;
+    const cp1y=fy+(ty-fy)*.35, cp2y=fy+(ty-fy)*.65;
+
+    const active=edgeActive(f,t);
+    const inScene=edgeInScenario(f,t);
+
+    ctx2d.beginPath();
+    ctx2d.moveTo(fx,fy);
+    ctx2d.bezierCurveTo(fx,cp1y,tx,cp2y,tx,ty);
+
+    if(active){
+      const nd=N.find(n=>n.id===f);
+      const col=nd?LAYER_MAP[nd.layer].color:'#60a5fa';
+      const[r,g,b]=hex2rgb(col);
+      ctx2d.strokeStyle=`rgba(${r},${g},${b},.65)`;
+      ctx2d.lineWidth=2.5;
+      ctx2d.shadowColor=col;ctx2d.shadowBlur=10;
+      ctx2d.stroke();
+      ctx2d.shadowBlur=0;
+      // Arrowhead
+      ctx2d.beginPath();ctx2d.moveTo(tx,ty);ctx2d.lineTo(tx-4,ty-7);ctx2d.lineTo(tx+4,ty-7);ctx2d.closePath();
+      ctx2d.fillStyle=col;ctx2d.fill();
+    } else {
+      ctx2d.strokeStyle=step>=0?(inScene?'rgba(60,90,130,.12)':'rgba(30,42,58,.15)'):'rgba(30,42,58,.4)';
+      ctx2d.lineWidth=1;
+      ctx2d.stroke();
+    }
+  });
+
+  // Nodes
+  N.forEach(n=>{
+    const p=nodePos[n.id];if(!p)return;
+    const l=LAYER_MAP[n.layer];
+    const[r,g,b]=hex2rgb(l.color);
+    const act=nodeActive(n.id), inP=nodeInPath(n.id);
+    const isH=hovered===n.id, isS=selected===n.id;
+
+    if(act){ctx2d.shadowColor=l.color;ctx2d.shadowBlur=18;}
+    else if(inP){ctx2d.shadowColor=l.color;ctx2d.shadowBlur=6;}
+
+    rrect(p.x,p.y,p.w,p.h,7);
+
+    if(act){
+      const pulse=.7+.3*Math.sin(time*5);
+      ctx2d.fillStyle=`rgba(${r},${g},${b},${.18*pulse})`;ctx2d.fill();
+      ctx2d.strokeStyle=`rgba(${r},${g},${b},.85)`;ctx2d.lineWidth=2;ctx2d.stroke();
+    } else if(inP){
+      ctx2d.fillStyle=`rgba(${r},${g},${b},.07)`;ctx2d.fill();
+      ctx2d.strokeStyle=`rgba(${r},${g},${b},.35)`;ctx2d.lineWidth=1.5;ctx2d.stroke();
+    } else if(isH||isS){
+      ctx2d.fillStyle=`rgba(${r},${g},${b},.08)`;ctx2d.fill();
+      ctx2d.strokeStyle=`rgba(${r},${g},${b},.45)`;ctx2d.lineWidth=1.5;ctx2d.stroke();
+    } else {
+      ctx2d.fillStyle=step>=0?'rgba(12,16,24,.6)':'rgba(15,21,32,.85)';ctx2d.fill();
+      ctx2d.strokeStyle=step>=0?`rgba(${r},${g},${b},.1)`:`rgba(${r},${g},${b},.25)`;
+      ctx2d.lineWidth=1;ctx2d.stroke();
+    }
+    ctx2d.shadowBlur=0;
+
+    // Animated ring for active
+    if(act){
+      const rr=Math.max(p.w,p.h)*.65;
+      const ra=.12+.08*Math.sin(time*3.5);
+      ctx2d.beginPath();ctx2d.arc(p.x+p.w/2,p.y+p.h/2,rr,0,Math.PI*2);
+      ctx2d.strokeStyle=`rgba(${r},${g},${b},${ra})`;ctx2d.lineWidth=1;ctx2d.stroke();
+      // Scanning arc
+      const ang=time*2;
+      ctx2d.beginPath();ctx2d.arc(p.x+p.w/2,p.y+p.h/2,rr,ang,ang+.8);
+      ctx2d.strokeStyle=`rgba(${r},${g},${b},.4)`;ctx2d.lineWidth=2;ctx2d.stroke();
+    }
+
+    // Color bar
+    ctx2d.fillStyle=act?l.color:(inP?`rgba(${r},${g},${b},.5)`:`rgba(${r},${g},${b},.15)`);
+    rrect(p.x,p.y,3,p.h,1.5);ctx2d.fill();
+
+    // Label
+    ctx2d.font=act?'bold 10.5px monospace':'10.5px monospace';
+    ctx2d.textAlign='center';ctx2d.textBaseline='middle';
+    ctx2d.fillStyle=act?'#fff':(inP?`rgba(${r},${g},${b},.9)`:(step>=0?`rgba(200,214,229,.3)`:'#b0bec5'));
+    ctx2d.fillText(n.label,p.x+p.w/2,p.y+p.h/2);
+  });
+
+  spawnParticles();
+  updateAndDrawParticles();
+  requestAnimationFrame(render);
+}
+
+// ================================================================
+// INTERACTION
+// ================================================================
+function hitTest(mx,my){for(const n of N){const p=nodePos[n.id];if(p&&mx>=p.x&&mx<=p.x+p.w&&my>=p.y&&my<=p.y+p.h)return n;}return null;}
+
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  const n=hitTest(e.clientX-r.left,e.clientY-r.top);
+  if(n){
+    hovered=n.id;canvas.style.cursor='pointer';
+    tooltip.innerHTML=`<strong>${n.label}</strong><br>${n.desc.slice(0,120)}${n.desc.length>120?'...':''}`;
+    let tx=e.clientX+14,ty=e.clientY-10;
+    tooltip.style.left=tx+'px';tooltip.style.top=ty+'px';
+    tooltip.classList.add('visible');
+    requestAnimationFrame(()=>{
+      const tr=tooltip.getBoundingClientRect();
+      if(tr.right>window.innerWidth-8)tooltip.style.left=(e.clientX-tr.width-14)+'px';
+      if(tr.bottom>window.innerHeight-8)tooltip.style.top=(e.clientY-tr.height-14)+'px';
+    });
+  } else {hovered=null;canvas.style.cursor='default';tooltip.classList.remove('visible');}
+});
+
+canvas.addEventListener('click',e=>{
+  const r=canvas.getBoundingClientRect();
+  const n=hitTest(e.clientX-r.left,e.clientY-r.top);
+  if(n){selected=n.id;showDetail(n);}
+  else{selected=null;detailPanel.classList.remove('open');setTimeout(layout,400);}
+});
+
+canvas.addEventListener('mouseleave',()=>{hovered=null;tooltip.classList.remove('visible');});
+document.getElementById('closeDetail').addEventListener('click',()=>{selected=null;detailPanel.classList.remove('open');setTimeout(layout,400);});
+
+function showDetail(node){
+  const l=LAYER_MAP[node.layer];
+  const incoming=EDGES.filter(e=>e[1]===node.id).map(e=>N.find(n=>n.id===e[0])).filter(Boolean);
+  const outgoing=EDGES.filter(e=>e[0]===node.id).map(e=>N.find(n=>n.id===e[1])).filter(Boolean);
+  const scenes=Object.entries(SCENARIOS).filter(([k,v])=>v.steps.some(s=>s.nodes.includes(node.id)));
+
+  detailContent.innerHTML=`
+    <h2 style="color:${l.color}">${node.label}</h2>
+    <div class="node-type" style="color:${l.color}">${l.label}</div>
+    <div class="desc">${node.desc}</div>
+    <div class="section-title">Data Flow</div>
+    <div class="io-block"><div class="io-label input">INPUT</div><code>${node.in}</code></div>
+    <div class="io-block"><div class="io-label output">OUTPUT</div><code>${node.out}</code></div>
+    <div class="section-title">Source Files</div>
+    <ul class="file-list">${node.files.map(f=>`<li>${f}</li>`).join('')}</ul>
+    ${incoming.length?`<div class="section-title">Receives From</div><ul class="file-list">${incoming.map(n=>`<li>${n.label} <span style="color:#4a5a6a">(${LAYER_MAP[n.layer].label})</span></li>`).join('')}</ul>`:''}
+    ${outgoing.length?`<div class="section-title">Sends To</div><ul class="file-list">${outgoing.map(n=>`<li>${n.label} <span style="color:#4a5a6a">(${LAYER_MAP[n.layer].label})</span></li>`).join('')}</ul>`:''}
+    ${scenes.length?`<div class="section-title">Active In Scenarios</div><ul class="file-list">${scenes.map(([k,v])=>`<li>${v.title}</li>`).join('')}</ul>`:''}
+  `;
+  detailPanel.classList.add('open');
+  setTimeout(layout,50);
+}
+
+// ─── Scenario Controls ───
+document.querySelectorAll('.scenario-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.scenario-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    scenario=btn.dataset.scenario;step=-1;particles=[];stopAuto();updateUI();
+  });
+});
+
+function updateUI(){
+  const s=SCENARIOS[scenario];if(!s)return;
+  const ind=document.getElementById('stepIndicator');
+  const desc=document.getElementById('flowDesc');
+  ind.innerHTML=s.steps.map((_,i)=>`<div class="step-dot ${i<step?'passed':i===step?'active':''}"></div>`).join('');
+  if(step>=0&&step<s.steps.length){
+    const st=s.steps[step];
+    desc.innerHTML=`<strong>Step ${step+1}/${s.steps.length}:</strong> ${st.desc} — <span style="color:#7a8a9a">${st.detail}</span>`;
+  } else {
+    desc.innerHTML=`<strong>${s.title}</strong> — Click <strong>Next</strong> or <strong>Auto</strong> to trace the flow`;
+  }
+  document.getElementById('btnPrev').disabled=step<=0;
+  document.getElementById('btnNext').disabled=step>=s.steps.length-1;
+}
+
+document.getElementById('btnNext').addEventListener('click',()=>{const s=SCENARIOS[scenario];if(s&&step<s.steps.length-1){step++;particles=[];updateUI();}});
+document.getElementById('btnPrev').addEventListener('click',()=>{if(step>0){step--;particles=[];updateUI();}});
+document.getElementById('btnReset').addEventListener('click',()=>{step=-1;particles=[];stopAuto();updateUI();});
+document.getElementById('btnAutoPlay').addEventListener('click',()=>{autoTimer?stopAuto():startAuto();});
+
+function startAuto(){
+  const btn=document.getElementById('btnAutoPlay');
+  btn.textContent='⏸ Pause';btn.style.borderColor='#60a5fa';btn.style.color='#60a5fa';
+  if(step<0)step=0;updateUI();
+  autoTimer=setInterval(()=>{
+    const s=SCENARIOS[scenario];if(!s)return;
+    step=step<s.steps.length-1?step+1:0;
+    particles=[];updateUI();
+  },2400);
+}
+function stopAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;}
+  const btn=document.getElementById('btnAutoPlay');
+  btn.textContent='▶ Auto';btn.style.borderColor='';btn.style.color='';
+}
+
+// ─── Keyboard shortcuts ───
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();document.getElementById('btnNext').click();}
+  else if(e.key==='ArrowLeft'){e.preventDefault();document.getElementById('btnPrev').click();}
+  else if(e.key==='Escape'){step=-1;particles=[];stopAuto();updateUI();selected=null;detailPanel.classList.remove('open');setTimeout(layout,400);}
+  else if(e.key==='a'){document.getElementById('btnAutoPlay').click();}
+});
+
+// ================================================================
+// INIT
+// ================================================================
+window.addEventListener('resize',resize);
+resize();updateUI();render();
+</script>
+</body>
+</html>
