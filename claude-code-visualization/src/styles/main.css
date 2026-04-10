@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ═══════════════════════════════════════════
+   Dark Theme (default)
+   ═══════════════════════════════════════════ */
+:root {
+  --bg-deep: #0b0f17;
+  --bg-panel: #0e1319;
+  --bg-card: #12171f;
+  --bg-surface: #171d27;
+  --bg-elevated: #1c2330;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+
+  --border: #1c2536;
+  --border-subtle: #161d2a;
+  --border-hover: #2d4a72;
+  --border-focus: #3d6a9f;
+
+  --text-primary: #dce4ed;
+  --text-secondary: #97a5b6;
+  --text-muted: #5e6e80;
+  --text-dim: #3c4c5e;
+
+  --accent-blue: #5b9cf5;
+  --accent-purple: #9b7ff0;
+  --accent-green: #36c997;
+  --accent-orange: #e8842a;
+  --accent-pink: #e86ca0;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --overlay: rgba(0, 0, 0, 0.55);
+  --backdrop-blur: blur(12px);
+
+  /* Sequence diagram specific */
+  --seq-row-alt: rgba(255, 255, 255, 0.007);
+  --seq-row-current: rgba(91, 156, 245, 0.04);
+  --seq-row-passed: rgba(54, 201, 151, 0.015);
+  --seq-lifeline: #182030;
+  --seq-hdr-bg: #0f1520;
+  --seq-hdr-hover: #151c2a;
+  --seq-left-col: #090d15;
+  --seq-border: #1a2536;
+  --seq-step-future: #4a5a6a;
+  --seq-step-current: #8ab8e0;
+  --seq-step-passed: #4a8a6a;
+  --seq-step-num: #3a4a5a;
+
+  /* Component-level theme tokens */
+  --layer-label-alpha: 35;
+  --node-badge-opacity: 0.5;
+  --node-card-shadow: none;
+  --edge-idle-opacity: 0.5;
+
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════
+   Light Theme
+   ═══════════════════════════════════════════ */
+[data-theme="light"] {
+  --bg-deep: #f0f2f6;
+  --bg-panel: #ffffff;
+  --bg-card: #ffffff;
+  --bg-surface: #e6e9ef;
+  --bg-elevated: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+
+  --border: #c5cdd8;
+  --border-subtle: #d8dee6;
+  --border-hover: #96a4b8;
+  --border-focus: #7a9cc4;
+
+  --text-primary: #1a2332;
+  --text-secondary: #4a5568;
+  --text-muted: #7a8799;
+  --text-dim: #a0abba;
+
+  --accent-blue: #3b82f6;
+  --accent-purple: #7c5ce0;
+  --accent-green: #16a870;
+  --accent-orange: #d97020;
+  --accent-pink: #d4508c;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.12);
+
+  --overlay: rgba(0, 0, 0, 0.3);
+
+  --seq-row-alt: rgba(0, 0, 0, 0.015);
+  --seq-row-current: rgba(59, 130, 246, 0.06);
+  --seq-row-passed: rgba(22, 168, 112, 0.04);
+  --seq-lifeline: #d4dae3;
+  --seq-hdr-bg: #f8f9fb;
+  --seq-hdr-hover: #eef0f4;
+  --seq-left-col: #eef0f4;
+  --seq-border: #d4dae3;
+  --seq-step-future: #64748b;
+  --seq-step-current: #2563eb;
+  --seq-step-passed: #16a870;
+  --seq-step-num: #64748b;
+
+  /* Component-level theme tokens — higher contrast for light */
+  --layer-label-alpha: 80;
+  --node-badge-opacity: 0.75;
+  --node-card-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  --edge-idle-opacity: 0.7;
+
+  color-scheme: light;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+/* ─── Vue Flow overrides ─── */
+.vue-flow {
+  background: var(--bg-deep) !important;
+}
+.vue-flow__background {
+  background: var(--bg-deep) !important;
+}
+.vue-flow__minimap {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.vue-flow__minimap-mask {
+  fill: rgba(91, 156, 245, 0.08) !important;
+  stroke: var(--accent-blue) !important;
+  stroke-width: 1 !important;
+}
+.vue-flow__minimap-node {
+  fill: rgba(91, 156, 245, 0.25) !important;
+  stroke: none !important;
+}
+.vue-flow__controls {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+  box-shadow: var(--shadow-md) !important;
+}
+.vue-flow__controls button {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text-muted) !important;
+  width: 32px !important;
+  height: 32px !important;
+  transition: all 0.2s !important;
+}
+.vue-flow__controls button:hover {
+  background: var(--bg-hover) !important;
+  color: var(--accent-blue) !important;
+}
+.vue-flow__controls button:last-child {
+  border-bottom: none !important;
+}
+.vue-flow__controls button svg {
+  fill: currentColor !important;
+}
+.vue-flow__edge-path {
+  stroke-width: 1.5;
+}
+.vue-flow__attribution {
+  display: none !important;
+}
+
+/* Handle styling */
+.vue-flow__handle {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.vue-flow__node:hover .vue-flow__handle {
+  opacity: 1;
+}
+
+/* Smooth node position transitions */
+.vue-flow__node {
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Selection box */
+.vue-flow__selection {
+  background: rgba(91, 156, 245, 0.05) !important;
+  border: 1px solid rgba(91, 156, 245, 0.3) !important;
+}
